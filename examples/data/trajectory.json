@@ -1,0 +1,7 @@
+[
+  {"action": "查询库存", "goal": "补货", "params": {"item": "apple"}, "world_before": {"库存.苹果": 0, "资金": 100}, "world_after": {"库存.苹果": 0, "资金": 100}, "success": true},
+  {"action": "下单采购", "goal": "补货", "params": {"item": "apple", "qty": 10}, "world_before": {"库存.苹果": 0, "资金": 100}, "world_after": {"库存.苹果": 10, "资金": 50}, "success": true},
+  {"action": "入库登记", "goal": "补货", "params": {}, "world_before": {"库存.苹果": 10, "资金": 50}, "world_after": {"库存.苹果": 10, "资金": 50, "在途订单": false}, "success": true},
+  {"action": "上架销售", "goal": "售出", "params": {"channel": "online"}, "world_before": {"库存.苹果": 10, "资金": 50, "在途订单": false}, "world_after": {"库存.苹果": 10, "资金": 50, "已上架": true}, "success": true},
+  {"action": "卖出苹果", "goal": "售出", "params": {"qty": 10}, "world_before": {"库存.苹果": 10, "资金": 50, "已上架": true}, "world_after": {"库存.苹果": 0, "资金": 130, "已上架": true}, "success": true}
+]

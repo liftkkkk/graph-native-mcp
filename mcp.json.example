@@ -1,0 +1,45 @@
+{
+  "_comment": "graph-native-mcp client configuration example. Copy the servers you need into your MCP client config (zcode / Claude Code / Cursor / any MCP host) — this project was built to plug into zcode + GLM-5.3, giving the model graph-native capabilities it lacks natively. All four servers share one SQLite store via GNM_DB. Install first: pip install graph-native-mcp  (or run from source: python -m graph_native_mcp.cli <server>).",
+  "mcpServers": {
+    "graph-memory": {
+      "command": "gnm",
+      "args": ["memory"],
+      "env": {
+        "GNM_DB": "C:/Users/yourname/.gnm/graph.db"
+      }
+    },
+    "graph-rag": {
+      "command": "gnm",
+      "args": ["rag"],
+      "env": {
+        "GNM_DB": "C:/Users/yourname/.gnm/graph.db"
+      }
+    },
+    "graph-build": {
+      "command": "gnm",
+      "args": ["build"],
+      "env": {
+        "GNM_DB": "C:/Users/yourname/.gnm/graph.db",
+        "GNM_LLM_BASE_URL": "https://api.openai.com/v1",
+        "GNM_LLM_API_KEY": "sk-...",
+        "GNM_LLM_MODEL": "gpt-4o-mini",
+        "GNM_EMBED_BACKEND": "openai",
+        "GNM_EMBED_BASE_URL": "https://api.openai.com/v1",
+        "GNM_EMBED_API_KEY": "sk-...",
+        "GNM_EMBED_MODEL": "text-embedding-3-small"
+      }
+    },
+    "graph-agent": {
+      "command": "gnm",
+      "args": ["agent"],
+      "env": {
+        "GNM_DB": "C:/Users/yourname/.gnm/graph.db"
+      }
+    }
+  },
+  "_notes": {
+    "minimal_setup": "只挂 memory + rag 就能用（离线、零 API key）。嵌入默认用确定性 hash 后端，配置 GNM_EMBED_* 换成语义嵌入。",
+    "separation": "build 是唯一需要 LLM key 的 server；rag 只读无 LLM；agent 确定性无 LLM。",
+    "sharing": "四个 server 通过同一个 GNM_DB 共享数据，彼此零调用。"
+  }
+}

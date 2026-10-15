@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "graph-native-mcp"
+version = "0.1.0"
+description = "Graph-native agent capabilities as MCP servers: memory, RAG, graph construction, and skill-graph planning. Companion open-source implementation of the book 'Graph-Native Agents (Graph x LLM x Agent)'."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["mcp", "knowledge-graph", "graph-memory", "graphrag", "agent", "skill-graph"]
+authors = [{ name = "graph-native-mcp contributors" }]
+dependencies = [
+    "mcp>=1.2.0",
+    "networkx>=3.0",
+]
+
+[project.optional-dependencies]
+viz = ["pyvis>=0.3.2"]
+
+[project.scripts]
+gnm = "graph_native_mcp.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/liftkkkk/graph-native-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/graph_native_mcp"]
