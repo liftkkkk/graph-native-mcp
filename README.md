@@ -1,42 +1,47 @@
 # graph-native-mcp
 
-**图原生智能体的四个 MCP server**：把《图原生智能体（Graph × LLM × Agent 技术详解）》第 5–8 章的核心能力，封装成任何 MCP 客户端（zcode / Claude Code / Cursor / 任意 MCP Host）都能直接调用的工具。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[中文说明](README.zh-CN.md)
 
-## 为什么做这个项目
+**Four MCP servers for graph-native agents**: the core capabilities of chapters 5–8 of the book *Graph-Native Agents (Graph × LLM × Agent)*, packaged as tools that any MCP client (zcode / Claude Code / Cursor / any MCP host) can call directly.
 
-这个项目是为**接入 zcode** 而开发的。zcode + GLM-5.3 是很强的编码与推理组合，但它本身没有图原生能力——没有跨会话的长期记忆图、没有可审计的图检索、没有带断言的技能库。挂上这四个 MCP server，GLM-5.3 就补上了这一层：
+## Why this project exists
 
-- **GLM-5.3 负责判断**：定目标、读证据、下结论、解计划——模型擅长的概率推理；
-- **本项目的 server 负责确定性部分**：双时间戳记忆、带引用 id 的图检索、前置/效果断言校验、A* 规划、审计回放——可测试、可离线验证。
+This project was built to **plug into zcode**. zcode + GLM-5.3 is a strong coding-and-reasoning combo, but it has no graph-native capabilities natively — no cross-session memory graph, no auditable graph retrieval, no assertion-backed skill library. Mount these four MCP servers, and GLM-5.3 gains that layer:
 
-这个分工正是书里的主张：「检索管找证据，模型管下判断」。在 zcode 里配好 MCP（见下），GLM-5.3 的每一次记忆写入、检索、规划、执行都走这四张图，证据链与词元开销全程可观测。
+- **GLM-5.3 does the judging**: setting goals, reading evidence, drawing conclusions, interpreting plans — the probabilistic reasoning models are good at;
+- **These servers do the deterministic part**: bi-temporal memory, retrieval with citation ids, precondition/effect assertion checks, A* planning, audit replay — testable and verifiable offline.
+
+This division is exactly the book's thesis: *retrieval finds the evidence, the model makes the call*. Once configured in zcode (see below), every memory write, retrieval, plan and execution by GLM-5.3 goes through these four graphs, with the evidence chain and token cost observable end to end.
 
 ```
-zcode（GLM-5.3）
-        │ MCP 协议
+zcode (GLM-5.3)
+        │ MCP protocol
         ├──────────────┬──────────────┬──────────────┐
    graph-memory    graph-rag      graph-build    graph-agent
-   第6章 记忆图      第5章 三种检索   第7章 构建管线   第8章 图原生核心
-   双时间戳·冲突检测  局部/全局/路径   抽取·NL2查询·体检  技能图·A*规划·世界模型
+   Ch.6 memory     Ch.5 three     Ch.7 build     Ch.8 graph-native core
+   bi-temporal ·   retrieval      pipeline       skill graph · A* planning ·
+   conflict detect local/global/  extraction ·   world model
+                   paths          NL2query · checkup
         └──────────────┴──────┬───────┴──────────────┘
-                        gxt-core 共享 Python 包
-        SQLite 图存储 · bi-temporal schema · 证据序列化 · 嵌入接口 · 图算法
+                     gxt-core shared Python package
+   SQLite graph store · bi-temporal schema · evidence serialization · embeddings · graph algorithms
 ```
 
-四个 server **共享同一个 SQLite 存储，彼此零调用**——你可以只挂两个，另外两个以后再加。
+The four servers **share one SQLite store and never call each other** — mount two now, add the rest later.
 
-## 安装
+## Installation
 
 ```bash
-pip install graph-native-mcp        # 发布 PyPI 后
-pip install -e .                    # 或从源码
+pip install graph-native-mcp        # once published on PyPI
+pip install -e .                    # or from source
 ```
 
-依赖只有 `mcp` 和 `networkx`。不需要 GPU、不需要数据库服务、默认零网络。
+Only two dependencies: `mcp` and `networkx`. No GPU, no database service, zero network by default.
 
-## 快速开始（zcode + GLM-5.3）
+## Quick start (zcode + GLM-5.3)
 
-把 [mcp.json.example](mcp.json.example) 里你需要的 server 复制进 zcode 的 MCP 配置，GLM-5.3 即获得图原生能力。最小组合（离线可用、零 API key）：
+Copy the servers you need from [mcp.json.example](mcp.json.example) into your zcode MCP config, and GLM-5.3 gains graph-native capabilities. Minimal setup (works offline, zero API keys):
 
 ```json
 {
@@ -47,84 +52,101 @@ pip install -e .                    # 或从源码
 }
 ```
 
-三分钟上手见 [examples/quickstart.md](examples/quickstart.md)。
+A three-minute walkthrough lives in [examples/quickstart.md](examples/quickstart.md).
 
-## 四个 server 与书稿章节的对应
+## The four servers, mapped to the book
 
-| Server | 章节 | 工具 | 一句话 |
+| Server | Chapter | Tools | In one line |
 |---|---|---|---|
-| **graph-memory** | 第 6 章 图作为长期记忆 | `write_memory` `get_timeline` `consolidate` `semantic_search` `retrieve_context` `add_knowledge` `add_node/edge` `ingest_file` …（15 个） | 矛盾不覆盖、历史不删除、冷热可观测 |
-| **graph-rag** | 第 5 章 图增强检索 | `search_local` `search_global` `search_paths` `build_communities` | 三种检索模式，只读无 LLM，证据带引用 id |
-| **graph-build** | 第 7 章 大模型增强图谱 | `ingest_document` `text_to_query` `graph_checkup` | 四层抽取错误可归因；唯一需要 LLM key 的 server |
-| **graph-agent** | 第 8 章 图原生智能体 | `register_skill` `extract_skills` `plan` `apply_action` `report_result` `set_constraint` `replay` …（11 个） | 技能带前置/效果断言，规划=图上 A*，约束在搜索前生效 |
+| **graph-memory** | Ch. 6 Graph as long-term memory | `write_memory` `get_timeline` `consolidate` `semantic_search` `retrieve_context` `add_knowledge` `add_node/edge` `ingest_file` … (15) | Conflicts preserved, history never deleted, memory temperature observable |
+| **graph-rag** | Ch. 5 Graph-augmented retrieval | `search_local` `search_global` `search_paths` `build_communities` | Three retrieval modes, read-only, no LLM, evidence with citation ids |
+| **graph-build** | Ch. 7 LLM-augmented graphs | `ingest_document` `text_to_query` `graph_checkup` | Four-layer extraction with attributable errors; the only server needing an LLM key |
+| **graph-agent** | Ch. 8 Graph-native agents | `register_skill` `extract_skills` `plan` `apply_action` `report_result` `set_constraint` `replay` … (11) | Skills with precondition/effect assertions, planning = A* on the skill graph, constraints enforced before search |
 
-### graph-memory：记忆是保留式更新
+### graph-memory: preserve-style updates
 
-`write_memory` 双时间戳分开记「事实发生时间」与「系统知道的时间」；新记忆与旧记忆冲突时不覆盖，建 `contradicts` 边保留双方（检索时合并策略或人工裁决）；只有用户明确说「之前记错了」（`explicit_correction=True`）才标记 superseded——旧节点保留可回溯，从不物理删除。`get_timeline("张三", as_of="2024-06-01")` 回答「当时系统知道什么」。`consolidate()` 做指数时间衰减（按记忆类型分档 λ），冷记忆只报告不删除。
+`write_memory` records two timestamps per fact — when it *happened* vs. when the system *learned it*. A new memory that conflicts with an old one is never overwritten: a `contradicts` edge preserves both sides (merged at retrieval time or adjudicated by a human). Only an explicit correction (`explicit_correction=True`) marks the old node superseded — it stays traceable, never physically deleted. `get_timeline("Alice", as_of="2024-06-01")` answers *what did the system know back then*. `consolidate()` applies exponential time decay (λ tiered by memory type); cold memories are reported, not destroyed.
 
-### graph-rag：检索管找证据，模型管下判断
+### graph-rag: retrieval finds evidence, the model makes the call
 
-三种检索模式对应三类问题：`search_local`（谁是谁的什么）、`search_global`（全局在讲什么）、`search_paths`（A 如何影响 B，路径即推理链）。每次检索返回**审计三件套**：带 `[节点] n123` / `[边] n123 -[involves]-> n456` 引用 id 的证据文本 + 引用闭包 + 代价报告（节点数/边数/词元估计）。路径不存在时明确返回「图上无证据」，而不是强行编造。
+Three retrieval modes for three question types: `search_local` (who is related to whom), `search_global` (what is this corpus about), `search_paths` (how does A affect B — the path *is* the reasoning chain). Every call returns the **audit triple**: evidence text with `[node] n123` / `[edge] n123 -[involves]-> n456` citation ids + the citation closure + a cost report (nodes / edges / estimated tokens). When no path exists, it says so honestly — "no evidence on the graph" — instead of fabricating one.
 
-### graph-build：错误可归因的抽取管线
+### graph-build: an extraction pipeline with attributable errors
 
-`ingest_document` 四层管线（候选生成 → 消歧与链接 → 关系判定 → 写入门控）逐层返回统计，出错能定位到层。`text_to_query` 是约束生成 + 执行反馈闭环：生成 → 试跑 → 报错回喂重试。`graph_checkup` 体检五类图错误（孤立节点 / hub 度数异常 / 断链 / schema 违规 / 低置信与无来源）。
+`ingest_document` runs a four-layer pipeline (candidate generation → disambiguation & linking → relation judgment → write gate) and reports per-layer statistics, so every failure has a layer to blame. `text_to_query` is constrained generation with an execution-feedback loop: generate → run → feed the error back → retry. `graph_checkup` screens five classes of graph errors (isolated nodes / hub degree anomalies / dangling refs / schema violations / low-confidence and unattributed).
 
-### graph-agent：图上思考与行动
+### graph-agent: thinking and acting on graphs
 
 ```python
-set_world_state({"库存.苹果": 5, "资金": 100})          # 世界模型可寻址
-register_skill("采购苹果",
-    precondition=[{"key": "资金", "op": "ge", "value": 50}],   # 机器可验证
-    effect=[{"key": "库存.苹果", "op": "add", "value": 10},
-            {"key": "资金", "op": "sub", "value": 50}])
-plan(goal=[{"key": "资金", "op": "ge", "value": 120}])
-# → 采购苹果 → 卖出苹果；边权 = cost / 成功率，连续失败的技能自动被绕开
-set_constraint(forbidden_skills=[...], gate_skills=[...])  # 红线在搜索前生效
-apply_action(skill_id, delta={...})                        # ΔW 增量更新
-replay()                                                   # 审计回放
+set_world_state({"inventory.apple": 5, "cash": 100})       # addressable world model
+register_skill("buy_apples",
+    precondition=[{"key": "cash", "op": "ge", "value": 50}],    # machine-verifiable
+    effect=[{"key": "inventory.apple", "op": "add", "value": 10},
+            {"key": "cash", "op": "sub", "value": 50}])
+plan(goal=[{"key": "cash", "op": "ge", "value": 120}])
+# → buy_apples → sell_apples; edge weight = cost / success_rate,
+#   skills that keep failing get routed around automatically
+set_constraint(forbidden_skills=[...], gate_skills=[...])   # red lines apply before search
+apply_action(skill_id, delta={...})                         # ΔW incremental update
+replay()                                                    # audit replay
 ```
 
-`extract_skills` 从执行轨迹自动沉淀技能（效果 = 前后世界状态的 diff）。本 server 全程确定性、无 LLM 调用——客户端模型负责定目标和解计划，这里保证验证机制。
+`extract_skills` distills skills from execution trajectories automatically (effect = the diff between world states before and after). This server is fully deterministic with zero LLM calls — the client model sets goals and interprets plans; this side guarantees the verification machinery.
 
-## 设计原则
+## Design principles
 
-1. **一个 server = 一份独占状态。** 记忆图 / 只读索引 / 构建管线 / 技能图与世界模型，四份状态共享的只有底层存储。server 之间零调用、零依赖，按需挂载。
-2. **读写分离 + LLM 隔离。** rag 只读、无 LLM、毫秒级；build 是唯一需要 LLM key 的（抽取离不开模型）；agent 运行时写但只写自己的状态图。权限粒度、故障域、依赖重量不混。
-3. **运行时不做概率计算。** 检索、规划、验证都是确定性图计算，可测试、可离线验证。生成与判断留给客户端——这是 MCP 边界的正确切法。
-4. **字段即防线。** 无 `source_ids` 的 Fact 被写入门控直接拒绝、被检索层屏蔽；每条证据可沿 id 追溯到来源。
+1. **One server = one exclusive state.** Memory graph / read-only index / build pipeline / skill graph & world model: four states sharing only the underlying store. Zero calls, zero dependencies between servers — mount on demand.
+2. **Read/write separation + LLM isolation.** rag is read-only, LLM-free, millisecond-fast; build is the only server that needs an LLM key (extraction needs a model); agent writes at runtime but only to its own state graph. Permission granularity, failure domains and dependency weight never mix.
+3. **No probabilistic computation at runtime.** Retrieval, planning and verification are deterministic graph computations — testable, verifiable offline. Generation and judgment stay with the client: that is the correct cut for the MCP boundary.
+4. **Fields are the defense line.** A Fact without `source_ids` is rejected by the write gate and screened out of retrieval; every piece of evidence traces back to its source via ids.
 
-## 与 gx-memory 的关系
+## Relation to gx-memory
 
-graph-memory 是 [gx-memory](https://github.com/) 的继任：工具接口（`add_knowledge` / `semantic_search` / `retrieve_context` / `ingest_file` …）延续自 gx-memory，本地 GX 引擎 + pickle 后端换成可移植的 SQLite，并补上双时间戳、冲突检测边、时间衰减三件 gx-memory 缺失的能力。
+graph-memory is the successor of gx-memory: the tool interface (`add_knowledge` / `semantic_search` / `retrieve_context` / `ingest_file` …) carries over, the local GX-engine + pickle backend is replaced by portable SQLite, and the three pieces gx-memory lacked — bi-temporal timestamps, conflict-detection edges, and time decay — are added.
 
-## 环境变量
+## Environment variables
 
-| 变量 | 作用 | 默认 |
+| Variable | Purpose | Default |
 |---|---|---|
-| `GNM_DB` | SQLite 存储路径，四个 server 共用 | `~/.gnm/graph.db` |
-| `GNM_EMBED_BACKEND` | `hash`（离线确定性）/ `openai` | `hash` |
-| `GNM_EMBED_BASE_URL` / `_API_KEY` / `_MODEL` | OpenAI 兼容嵌入端点 | — |
-| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | graph-build 用的 LLM（OpenAI 兼容） | — |
+| `GNM_DB` | SQLite store path, shared by all four servers | `~/.gnm/graph.db` |
+| `GNM_EMBED_BACKEND` | `hash` (offline, deterministic) / `openai` | `hash` |
+| `GNM_EMBED_BASE_URL` / `_API_KEY` / `_MODEL` | OpenAI-compatible embedding endpoint | — |
+| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | LLM used by graph-build (OpenAI-compatible) | — |
 
-默认嵌入后端是确定性特征哈希：零依赖零网络，但只匹配表面词不匹配语义——评测与演示够用，生产请换真嵌入。
+The default embedding backend is deterministic feature hashing: zero dependencies, zero network, but it matches surface terms rather than meaning — fine for tests and demos; switch to a real embedding backend for production.
 
-## 测试
+## Tests
 
 ```bash
-python tests/run_tests.py          # 55 项离线断言（零网络、零 API key）
-python examples/smoketest_mcp.py   # 四个 server 真实 stdio 协议端到端
+python tests/run_tests.py          # 55 offline assertions (zero network, zero API keys)
+python examples/smoketest_mcp.py   # end-to-end over real MCP stdio, all four servers
 ```
 
-## 路线图
+## Roadmap
 
-- [ ] Kùzu 后端：`text_to_cypher` 真 Cypher（当前是 JSON DSL）
-- [ ] Leiden 算法替换 Louvain（连通性保证）
-- [ ] LLM 辅助冲突判定与社区摘要（graph-build 内）
-- [ ] sqlite-vec 向量索引（当前暴力余弦，万级节点内够用）
-- [ ] 工具注册图：把四个 server 的 MCP 工具声明注册为图节点（书 8.2.4）
-- [ ] PyPI 发布
+- [ ] Kùzu backend: real Cypher for `text_to_query` (currently a JSON DSL)
+- [ ] Replace Louvain with Leiden (connectivity guarantee)
+- [ ] LLM-assisted conflict judgment and community summaries (inside graph-build)
+- [ ] sqlite-vec vector index (currently brute-force cosine, fine up to ~10k nodes)
+- [ ] Tool registry graph: register the MCP tool declarations of all four servers as graph nodes (book §8.2.4)
+- [ ] PyPI release
 
 ## License
 
 MIT
+
+---
+
+## Buy me a coffee
+
+graph-native-mcp is an open-source project I develop and maintain in my spare time, free forever.
+
+If it gave your AI assistant a long-term memory, auditable retrieval, or skill planning — consider buying me a coffee (9.9 CNY is enough). Every bit of support goes straight into new features and bug fixes.
+
+<p align="center">
+  <img src="donate.jpg" alt="Buy me a coffee" width="280">
+</p>
+
+<p align="center"><i>Leave a note with your donation about the feature you want most - I prioritize those ;)</i></p>
+
+**Can't donate?** Starring the repo, opening an Issue, or sharing it with someone who needs it helps just as much!
