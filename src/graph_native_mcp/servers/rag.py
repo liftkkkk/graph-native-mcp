@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from mcp.server.fastmcp import FastMCP
+from graph_native_mcp._fastmcp_compat import FastMCP
 
 from ..core import algorithms as alg
 from ..core.serialize import serialize_evidence, cost_report

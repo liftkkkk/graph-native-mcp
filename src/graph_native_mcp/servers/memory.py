@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 
-from mcp.server.fastmcp import FastMCP
+from graph_native_mcp._fastmcp_compat import FastMCP
 
 from ..core.store import GraphStore, default_db_path
 

@@ -29,7 +29,7 @@ import heapq
 import itertools
 import json
 
-from mcp.server.fastmcp import FastMCP
+from graph_native_mcp._fastmcp_compat import FastMCP
 
 from ..core.store import GraphStore, default_db_path
 

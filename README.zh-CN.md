@@ -58,7 +58,7 @@ pip install -e .                    # 或从源码
 |---|---|---|---|
 | **graph-memory** | 第 6 章 图作为长期记忆 | `write_memory` `get_timeline` `consolidate` `semantic_search` `retrieve_context` `add_knowledge` `add_node/edge` `ingest_file` …（15 个） | 矛盾不覆盖、历史不删除、冷热可观测 |
 | **graph-rag** | 第 5 章 图增强检索 | `search_local` `search_global` `search_paths` `build_communities` | 三种检索模式，只读无 LLM，证据带引用 id |
-| **graph-build** | 第 7 章 大模型增强图谱 | `ingest_document` `text_to_query` `graph_checkup` | 四层抽取错误可归因；唯一需要 LLM key 的 server |
+| **graph-build** | 第 7 章 大模型增强图谱 | `ingest_document` `get_extraction_prompt` `text_to_query` `graph_checkup` | 四层抽取错误可归因；agent 优先，零 API key |
 | **graph-agent** | 第 8 章 图原生智能体 | `register_skill` `extract_skills` `plan` `apply_action` `report_result` `set_constraint` `replay` …（11 个） | 技能带前置/效果断言，规划=图上 A*，约束在搜索前生效 |
 
 ### graph-memory：记忆是保留式更新
@@ -71,7 +71,7 @@ pip install -e .                    # 或从源码
 
 ### graph-build：错误可归因的抽取管线
 
-`ingest_document` 四层管线（候选生成 → 消歧与链接 → 关系判定 → 写入门控）逐层返回统计，出错能定位到层。`text_to_query` 是约束生成 + 执行反馈闭环：生成 → 试跑 → 报错回喂重试。`graph_checkup` 体检五类图错误（孤立节点 / hub 度数异常 / 断链 / schema 违规 / 低置信与无来源）。
+`ingest_document` 四层管线（候选生成 → 消歧与链接 → 关系判定 → 写入门控）逐层返回统计，出错能定位到层。**agent 优先设计**：调用方本身就是 LLM，生成层（L1）在宿主模型里完成——不带 `extraction_json` 调用会返回抽取 prompt，抽取后带结果重调，服务端本地跑确定性的 L2–L4。`text_to_query` 同理：调用方自己写 JSON DSL，服务端校验并执行，执行报错直接回喂下一轮对话——Ch.7.3 的反馈闭环，零 API key。`GNM_LLM_*` 是可选项，只为无 agent 在场的批量导入启用服务端内部生成。`graph_checkup` 体检五类图错误（孤立节点 / hub 度数异常 / 断链 / schema 违规 / 低置信与无来源）。
 
 ### graph-agent：图上思考与行动
 
@@ -93,7 +93,7 @@ replay()                                                   # 审计回放
 ## 设计原则
 
 1. **一个 server = 一份独占状态。** 记忆图 / 只读索引 / 构建管线 / 技能图与世界模型，四份状态共享的只有底层存储。server 之间零调用、零依赖，按需挂载。
-2. **读写分离 + LLM 隔离。** rag 只读、无 LLM、毫秒级；build 是唯一需要 LLM key 的（抽取离不开模型）；agent 运行时写但只写自己的状态图。权限粒度、故障域、依赖重量不混。
+2. **读写分离 + LLM 隔离。** rag 只读、无 LLM、毫秒级；build 把生成步骤留在调用方（零 key，另留可选的服务端 LLM 供批量导入）；agent 运行时写但只写自己的状态图。权限粒度、故障域、依赖重量不混。
 3. **运行时不做概率计算。** 检索、规划、验证都是确定性图计算，可测试、可离线验证。生成与判断留给客户端——这是 MCP 边界的正确切法。
 4. **字段即防线。** 无 `source_ids` 的 Fact 被写入门控直接拒绝、被检索层屏蔽；每条证据可沿 id 追溯到来源。
 
@@ -108,7 +108,7 @@ graph-memory 是 [gx-memory](https://github.com/) 的继任：工具接口（`ad
 | `GNM_DB` | SQLite 存储路径，四个 server 共用 | `~/.gnm/graph.db` |
 | `GNM_EMBED_BACKEND` | `hash`（离线确定性）/ `openai` | `hash` |
 | `GNM_EMBED_BASE_URL` / `_API_KEY` / `_MODEL` | OpenAI 兼容嵌入端点 | — |
-| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | graph-build 用的 LLM（OpenAI 兼容） | — |
+| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | 可选：启用 graph-build 服务端内部生成，供批量导入（OpenAI 兼容）。默认 agent 协作工作流不需要 | — |
 
 默认嵌入后端是确定性特征哈希：零依赖零网络，但只匹配表面词不匹配语义——评测与演示够用，生产请换真嵌入。
 

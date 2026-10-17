@@ -19,14 +19,7 @@
       "command": "gnm",
       "args": ["build"],
       "env": {
-        "GNM_DB": "C:/Users/yourname/.gnm/graph.db",
-        "GNM_LLM_BASE_URL": "https://api.openai.com/v1",
-        "GNM_LLM_API_KEY": "sk-...",
-        "GNM_LLM_MODEL": "gpt-4o-mini",
-        "GNM_EMBED_BACKEND": "openai",
-        "GNM_EMBED_BASE_URL": "https://api.openai.com/v1",
-        "GNM_EMBED_API_KEY": "sk-...",
-        "GNM_EMBED_MODEL": "text-embedding-3-small"
+        "GNM_DB": "C:/Users/yourname/.gnm/graph.db"
       }
     },
     "graph-agent": {
@@ -39,7 +32,8 @@
   },
   "_notes": {
     "minimal_setup": "只挂 memory + rag 就能用（离线、零 API key）。嵌入默认用确定性 hash 后端，配置 GNM_EMBED_* 换成语义嵌入。",
-    "separation": "build 是唯一需要 LLM key 的 server；rag 只读无 LLM；agent 确定性无 LLM。",
+    "build_zero_key": "graph-build 默认不需要任何 LLM key：抽取由调用方的 LLM 完成（工具返回抽取 prompt，模型产出 JSON 后带 extraction_json 重调）。GNM_LLM_* 仅在无 agent 的批量导入时可选配置。",
+    "separation": "rag 只读无 LLM；agent 确定性无 LLM；build 的生成步骤在调用方，服务端只做链接/门控/校验/执行等确定性部分。",
     "sharing": "四个 server 通过同一个 GNM_DB 共享数据，彼此零调用。"
   }
 }

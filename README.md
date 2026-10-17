@@ -60,7 +60,7 @@ A three-minute walkthrough lives in [examples/quickstart.md](examples/quickstart
 |---|---|---|---|
 | **graph-memory** | Ch. 6 Graph as long-term memory | `write_memory` `get_timeline` `consolidate` `semantic_search` `retrieve_context` `add_knowledge` `add_node/edge` `ingest_file` … (15) | Conflicts preserved, history never deleted, memory temperature observable |
 | **graph-rag** | Ch. 5 Graph-augmented retrieval | `search_local` `search_global` `search_paths` `build_communities` | Three retrieval modes, read-only, no LLM, evidence with citation ids |
-| **graph-build** | Ch. 7 LLM-augmented graphs | `ingest_document` `text_to_query` `graph_checkup` | Four-layer extraction with attributable errors; the only server needing an LLM key |
+| **graph-build** | Ch. 7 LLM-augmented graphs | `ingest_document` `get_extraction_prompt` `text_to_query` `graph_checkup` | Four-layer extraction with attributable errors; agent-first, zero API keys |
 | **graph-agent** | Ch. 8 Graph-native agents | `register_skill` `extract_skills` `plan` `apply_action` `report_result` `set_constraint` `replay` … (11) | Skills with precondition/effect assertions, planning = A* on the skill graph, constraints enforced before search |
 
 ### graph-memory: preserve-style updates
@@ -73,7 +73,7 @@ Three retrieval modes for three question types: `search_local` (who is related t
 
 ### graph-build: an extraction pipeline with attributable errors
 
-`ingest_document` runs a four-layer pipeline (candidate generation → disambiguation & linking → relation judgment → write gate) and reports per-layer statistics, so every failure has a layer to blame. `text_to_query` is constrained generation with an execution-feedback loop: generate → run → feed the error back → retry. `graph_checkup` screens five classes of graph errors (isolated nodes / hub degree anomalies / dangling refs / schema violations / low-confidence and unattributed).
+`ingest_document` runs a four-layer pipeline (candidate generation → disambiguation & linking → relation judgment → write gate) and reports per-layer statistics, so every failure has a layer to blame. **Agent-first by design**: the calling agent IS the LLM, so the generative layer (L1) runs in the host model — call `ingest_document` without `extraction_json` and it returns the extraction prompt; extract, then re-call with `extraction_json` and the server runs the deterministic L2–L4 locally. `text_to_query` is the same: the agent writes the JSON DSL, the server validates and executes it, and execution errors feed straight back into the next agent turn — the Ch.7.3 feedback loop without any API key. Setting `GNM_LLM_*` is optional and only enables server-side generation for batch imports where no agent is present. `graph_checkup` screens five classes of graph errors (isolated nodes / hub degree anomalies / dangling refs / schema violations / low-confidence and unattributed).
 
 ### graph-agent: thinking and acting on graphs
 
@@ -96,7 +96,7 @@ replay()                                                    # audit replay
 ## Design principles
 
 1. **One server = one exclusive state.** Memory graph / read-only index / build pipeline / skill graph & world model: four states sharing only the underlying store. Zero calls, zero dependencies between servers — mount on demand.
-2. **Read/write separation + LLM isolation.** rag is read-only, LLM-free, millisecond-fast; build is the only server that needs an LLM key (extraction needs a model); agent writes at runtime but only to its own state graph. Permission granularity, failure domains and dependency weight never mix.
+2. **Read/write separation + LLM isolation.** rag is read-only, LLM-free, millisecond-fast; build keeps its generative step in the calling agent (zero keys, with an optional server-side LLM for batch mode); agent writes at runtime but only to its own state graph. Permission granularity, failure domains and dependency weight never mix.
 3. **No probabilistic computation at runtime.** Retrieval, planning and verification are deterministic graph computations — testable, verifiable offline. Generation and judgment stay with the client: that is the correct cut for the MCP boundary.
 4. **Fields are the defense line.** A Fact without `source_ids` is rejected by the write gate and screened out of retrieval; every piece of evidence traces back to its source via ids.
 
@@ -111,7 +111,7 @@ graph-memory is the successor of gx-memory: the tool interface (`add_knowledge` 
 | `GNM_DB` | SQLite store path, shared by all four servers | `~/.gnm/graph.db` |
 | `GNM_EMBED_BACKEND` | `hash` (offline, deterministic) / `openai` | `hash` |
 | `GNM_EMBED_BASE_URL` / `_API_KEY` / `_MODEL` | OpenAI-compatible embedding endpoint | — |
-| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | LLM used by graph-build (OpenAI-compatible) | — |
+| `GNM_LLM_BASE_URL` / `_API_KEY` / `_MODEL` | Optional: enables server-side LLM generation in graph-build for batch imports (OpenAI-compatible). Not needed for the default agent-in-the-loop workflow | — |
 
 The default embedding backend is deterministic feature hashing: zero dependencies, zero network, but it matches surface terms rather than meaning — fine for tests and demos; switch to a real embedding backend for production.
 

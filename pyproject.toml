@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 keywords = ["mcp", "knowledge-graph", "graph-memory", "graphrag", "agent", "skill-graph"]
 authors = [{ name = "graph-native-mcp contributors" }]
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.2.0,<3",
     "networkx>=3.0",
 ]
 
