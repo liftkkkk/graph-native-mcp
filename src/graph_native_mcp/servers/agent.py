@@ -49,6 +49,37 @@ _OPS = {
     "exists": lambda a, b: True,
 }
 
+# LLM 常写的符号算子 → 规范算子（注册时归一化，求值时兜底）
+_OP_ALIASES = {"==": "eq", "=": "eq", "!=": "ne", "≠": "ne",
+               ">": "gt", ">=": "ge", "≥": "ge",
+               "<": "lt", "<=": "le", "≤": "le",
+               "not_exists": "ne", "missing": "ne"}
+
+_EFFECT_OPS = {"set", "add", "sub", "delete"}
+
+
+def _norm_op(op) -> str:
+    """符号/别名算子归一化为规范算子；未知的原样返回。"""
+    return _OP_ALIASES.get(op, op)
+
+
+def _norm_assertions(items) -> tuple[list, list]:
+    """归一化断言列表，返回 (normalized, problems)。
+    problems 里是非空 key 或未知算子的条目描述——注册时拒绝而不是静默放行。"""
+    out, problems = [], []
+    for a in items or []:
+        if not isinstance(a, dict) or not a.get("key"):
+            problems.append({"assertion": a, "reason": "missing key"})
+            continue
+        op = _norm_op(a.get("op", "eq"))
+        if op not in _OPS:
+            problems.append({"assertion": a,
+                             "reason": f"unknown op {a.get('op')!r}; "
+                                       f"allowed: eq/ne/gt/ge/lt/le/exists"})
+            continue
+        out.append({**a, "op": op})
+    return out, problems
+
 
 def _num(x):
     try:
@@ -73,7 +104,7 @@ def _ensure_world():
 
 
 def _assertion_ok(state: dict, a: dict) -> bool:
-    k, op = a.get("key"), a.get("op", "eq")
+    k, op = a.get("key"), _norm_op(a.get("op", "eq"))
     if k not in state:
         return False
     fn = _OPS.get(op)
@@ -180,20 +211,35 @@ def register_skill(name: str, precondition: list = None, effect: list = None,
                    params: dict = None, cost: float = 1.0,
                    enabled_by: list = None) -> dict:
     """注册一个技能节点（Ch.8.2.1）。技能不是自然语言描述，是可机器验证的：
-    - precondition: 前置断言列表 [{"key": "库存.苹果", "op": ">=", "value": 10}]
-      算子：eq/ne/gt/ge/lt/le/exists
+    - precondition: 前置断言列表 [{"key": "库存.苹果", "op": "ge", "value": 10}]
+      算子：eq/ne/gt/ge/lt/le/exists（符号写法 >=/<=/== 等会自动归一化）
     - effect: 效果断言 [{"key": "库存.苹果", "op": "sub", "value": 10},
                         {"key": "订单数", "op": "add", "value": 1}]
       算子：set/add/sub/delete
     - cost: 期望代价（时间/费用/风险，进入 A* 的边权）
     - enabled_by: 依赖的其他技能节点 ID 列表（建 enables 边）
-    同名技能自动版本化：旧版本保留，统计延续。"""
+    同名技能自动版本化：旧版本保留，统计延续。
+    断言非法（缺 key / 未知算子）会直接报错，而不是注册后规划时静默不可达。"""
+    pre, pre_problems = _norm_assertions(precondition)
+    eff = []
+    for e in effect or []:
+        if not isinstance(e, dict) or not e.get("key"):
+            return {"error": "invalid effect assertion (missing key)",
+                    "assertion": e}
+        if e.get("op", "set") not in _EFFECT_OPS:
+            return {"error": f"invalid effect op {e.get('op')!r}; "
+                             f"allowed: set/add/sub/delete",
+                    "assertion": e}
+        eff.append(e)
+    if pre_problems:
+        return {"error": "invalid precondition assertions",
+                "problems": pre_problems}
     s = store()
     existing = s.query_nodes(name_like=name, node_type="Skill")
     version = 1
     for e in existing:
         version = max(version, (e["properties"].get("version", 1)) + 1)
-    props = {"precondition": precondition or [], "effect": effect or [],
+    props = {"precondition": pre, "effect": eff,
              "params": params or {}, "cost": float(cost), "version": version,
              "success_count": 0, "fail_count": 0,
              "success_rate": None}
@@ -203,7 +249,7 @@ def register_skill(name: str, precondition: list = None, effect: list = None,
             s.add_edge(dep, sid, edge_type="enables")
     s.log_event("skill", {"tool": "register_skill", "skill": sid, "name": name})
     return {"skill_id": sid, "name": name, "version": version,
-            "precondition": precondition or [], "effect": effect or []}
+            "precondition": pre, "effect": eff}
 
 
 @mcp.tool()

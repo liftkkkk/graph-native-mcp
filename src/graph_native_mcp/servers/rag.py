@@ -245,12 +245,21 @@ def search_paths(query: str, source_entity: str = None,
 
 
 def _resolve_entity(s: GraphStore, name: str) -> str | None:
-    """Strict resolution: name/substring match on Entity nodes only.
-    No fuzzy fallback - an unresolvable entity must surface as
+    """Strict resolution over Entity/Event/Fact nodes: exact name match first,
+    then substring. No fuzzy fallback - an unresolvable entity must surface as
     「图上无证据」instead of silently binding to the nearest node.
-    (Fuzzy resolution returns with real embedding backends, roadmap.)"""
-    rows = s.query_nodes(name_like=name, node_type="Entity")
-    return rows[0]["node_id"] if rows else None
+    Event/Fact nodes are legitimate path endpoints: a question like "发布事件
+    与张三的关系" names an event, and refusing it would falsely report absence
+    of evidence that exists. (Fuzzy resolution with real embedding backends,
+    roadmap.)"""
+    for node_type in ("Entity", "Event", "Fact"):
+        rows = s.query_nodes(name_like=name, node_type=node_type)
+        for r in rows:
+            if r["name"] == name:
+                return r["node_id"]
+        if rows:
+            return rows[0]["node_id"]
+    return None
 
 
 def run():
